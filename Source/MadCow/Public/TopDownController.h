@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerController.h"
+#include "InputMappingContext.h"
 #include "TopDownController.generated.h"
 
 /**
@@ -14,4 +15,10 @@ class MADCOW_API ATopDownController : public APlayerController
 {
 	GENERATED_BODY()
 	
+public:
+	UPROPERTY(EditAnywhere, Category = "Input")
+	TSoftObjectPtr<UInputMappingContext> InputMapping;
+
+public:
+	void BeginPlay();
 };
