@@ -1,7 +1,8 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
+
 #include "Components/SceneComponent.h"
-#include "Components/StaticMeshComponent.h"
+#include "TileComponent.h"
 #include "Engine/StaticMesh.h"
 #include "HexTiledBuildSurface.h"
 
@@ -83,12 +84,13 @@ void AHexTiledBuildSurface::SpawnHexTiles()
 
 		FName tileName = FName(*FString::Printf(TEXT("Tile%d"), i));
 
-		UStaticMeshComponent* newMeshComponent = NewObject<UStaticMeshComponent>(this, UStaticMeshComponent::StaticClass(), tileName);
+		UTileComponent* newMeshComponent = NewObject<UTileComponent>(this, UTileComponent::StaticClass(), tileName);
 		newMeshComponent->RegisterComponent();
 		newMeshComponent->AttachToComponent(GetRootComponent(), FAttachmentTransformRules::KeepRelativeTransform);
 		newMeshComponent->SetRelativeTransform(newCompTransform);
 		newMeshComponent->SetStaticMesh(tileMesh);
 		newMeshComponent->SetCollisionObjectType(ECollisionChannel::ECC_GameTraceChannel1); // set collision channel as PlacingZone
+		newMeshComponent->SetGenerateOverlapEvents(true);
 
 		i++;
 	}
