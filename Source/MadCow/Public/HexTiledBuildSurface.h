@@ -25,6 +25,9 @@ public:
 	float interCenterDistance = 10.0;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Setup)
+	float capsuleHeight = 40;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Setup)
 	UStaticMesh* tileMesh;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Setup)

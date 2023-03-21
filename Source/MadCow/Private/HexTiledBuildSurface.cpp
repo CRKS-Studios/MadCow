@@ -106,17 +106,16 @@ void AHexTiledBuildSurface::SpawnHexTiles()
 		newTileComponent->SetGenerateOverlapEvents(true);
 
 		float radius = interCenterDistance / 2;
-		float height = 200;
-		FTransform newerCompTransform = FTransform(FRotator(),FVector(0, 0, height), FVector(1 / tileMeshTransform.GetScale3D().X, 1 / tileMeshTransform.GetScale3D().Y, 1 / tileMeshTransform.GetScale3D().Z));
+		FTransform newerCompTransform = FTransform(FRotator(),FVector(0, 0, capsuleHeight), FVector(1 / tileMeshTransform.GetScale3D().X, 1 / tileMeshTransform.GetScale3D().Y, 1 / tileMeshTransform.GetScale3D().Z));
 
 		FName capsuleName = FName(*FString::Printf(TEXT("TileCapsule%d"), i));
 
 		UCapsuleComponent* newCapsuleComponent = NewObject<UCapsuleComponent>(this, UCapsuleComponent::StaticClass(), capsuleName);
 		newCapsuleComponent->RegisterComponent();
-		newCapsuleComponent->SetCapsuleSize(radius, height);
+		newCapsuleComponent->SetCapsuleSize(radius, capsuleHeight);
 		newCapsuleComponent->AttachToComponent(newTileComponent, FAttachmentTransformRules::KeepRelativeTransform);
 		newCapsuleComponent->SetRelativeTransform(newerCompTransform);
-		newCapsuleComponent->SetCollisionObjectType(ECollisionChannel::ECC_GameTraceChannel2); // set object type to BuildCollision
+		newCapsuleComponent->SetCollisionObjectType(ECollisionChannel::ECC_GameTraceChannel3); // set object type to BuildCollision
 		newCapsuleComponent->SetGenerateOverlapEvents(true);
 
 		i++;
