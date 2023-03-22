@@ -25,6 +25,9 @@ public:
 	float interCenterDistance = 10.0;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Setup)
+	float capsuleHeight = 40;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Setup)
 	UStaticMesh* tileMesh;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Setup)
@@ -46,6 +49,8 @@ public:
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, meta = (BlueprintProtected))
 	TArray<FVector> getHexCentersCoords();
+
+	void OnCollision(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComponent, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& Hit);
 
 private:
 	float interLayerDistance = (std::sqrt(3) / 2) * interCenterDistance;
