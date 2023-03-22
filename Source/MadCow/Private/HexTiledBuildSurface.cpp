@@ -1,8 +1,11 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
+
 #include "Components/SceneComponent.h"
-#include "Components/StaticMeshComponent.h"
+#include "TileComponent.h"
 #include "Engine/StaticMesh.h"
+#include "Components/CapsuleComponent.h"
+#include "Math/TransformCalculus3D.h"
 #include "HexTiledBuildSurface.h"
 
 // Sets default values
@@ -45,6 +48,17 @@ TArray<FVector> AHexTiledBuildSurface::getHexCentersCoords()
 	return this->hexCentersLocations;
 }
 
+//void AHexTiledBuildSurface::OnCollision(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComponent, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& Hit)
+//{
+//	UTileComponent* tile = Cast<UTileComponent>(OverlappedComponent->GetAttachParent());
+//	if (tile->getIsOccupied() == true) {
+//
+//	}
+//	else {
+//	tile->setIsOccupied(true);
+//	}
+//}
+
 void AHexTiledBuildSurface::UpdateSetupVariables()
 {
 	this->interLayerDistance = (std::sqrt(3) / 2) * interCenterDistance;
@@ -83,12 +97,26 @@ void AHexTiledBuildSurface::SpawnHexTiles()
 
 		FName tileName = FName(*FString::Printf(TEXT("Tile%d"), i));
 
-		UStaticMeshComponent* newMeshComponent = NewObject<UStaticMeshComponent>(this, UStaticMeshComponent::StaticClass(), tileName);
-		newMeshComponent->RegisterComponent();
-		newMeshComponent->AttachToComponent(GetRootComponent(), FAttachmentTransformRules::KeepRelativeTransform);
-		newMeshComponent->SetRelativeTransform(newCompTransform);
-		newMeshComponent->SetStaticMesh(tileMesh);
-		newMeshComponent->SetCollisionObjectType(ECollisionChannel::ECC_GameTraceChannel1); // set collision channel as PlacingZone
+		UTileComponent* newTileComponent = NewObject<UTileComponent>(this, UTileComponent::StaticClass(), tileName);
+		newTileComponent->RegisterComponent();
+		newTileComponent->AttachToComponent(GetRootComponent(), FAttachmentTransformRules::KeepRelativeTransform);
+		newTileComponent->SetRelativeTransform(newCompTransform);
+		newTileComponent->SetStaticMesh(tileMesh);
+		newTileComponent->SetCollisionObjectType(ECollisionChannel::ECC_GameTraceChannel1); // set object type to PlacingZone
+		newTileComponent->SetGenerateOverlapEvents(true);
+
+		float radius = interCenterDistance / 2;
+		FTransform newerCompTransform = FTransform(FRotator(),FVector(0, 0, capsuleHeight), FVector(1 / tileMeshTransform.GetScale3D().X, 1 / tileMeshTransform.GetScale3D().Y, 1 / tileMeshTransform.GetScale3D().Z));
+
+		FName capsuleName = FName(*FString::Printf(TEXT("TileCapsule%d"), i));
+
+		UCapsuleComponent* newCapsuleComponent = NewObject<UCapsuleComponent>(this, UCapsuleComponent::StaticClass(), capsuleName);
+		newCapsuleComponent->RegisterComponent();
+		newCapsuleComponent->SetCapsuleSize(radius, capsuleHeight);
+		newCapsuleComponent->AttachToComponent(newTileComponent, FAttachmentTransformRules::KeepRelativeTransform);
+		newCapsuleComponent->SetRelativeTransform(newerCompTransform);
+		newCapsuleComponent->SetCollisionObjectType(ECollisionChannel::ECC_GameTraceChannel3); // set object type to BuildCollision
+		newCapsuleComponent->SetGenerateOverlapEvents(true);
 
 		i++;
 	}
