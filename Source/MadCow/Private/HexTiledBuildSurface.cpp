@@ -48,17 +48,6 @@ TArray<FVector> AHexTiledBuildSurface::getHexCentersCoords()
 	return this->hexCentersLocations;
 }
 
-//void AHexTiledBuildSurface::OnCollision(UPrimitiveComponent* OverlappedComponent, AActor* OtherActor, UPrimitiveComponent* OtherComponent, int32 OtherBodyIndex, bool bFromSweep, const FHitResult& Hit)
-//{
-//	UTileComponent* tile = Cast<UTileComponent>(OverlappedComponent->GetAttachParent());
-//	if (tile->getIsOccupied() == true) {
-//
-//	}
-//	else {
-//	tile->setIsOccupied(true);
-//	}
-//}
-
 void AHexTiledBuildSurface::UpdateSetupVariables()
 {
 	this->interLayerDistance = (std::sqrt(3) / 2) * interCenterDistance;
