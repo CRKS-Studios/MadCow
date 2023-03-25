@@ -107,6 +107,10 @@ void AHexTiledBuildSurface::SpawnHexTiles()
 		newCapsuleComponent->SetCollisionObjectType(ECollisionChannel::ECC_GameTraceChannel3); // set object type to BuildCollision
 		newCapsuleComponent->SetGenerateOverlapEvents(true);
 
+		if (!bDisplayCapsules) {
+			newCapsuleComponent->SetVisibility(false);
+		}
+
 		i++;
 	}
 }
