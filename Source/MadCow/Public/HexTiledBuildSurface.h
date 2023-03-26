@@ -33,6 +33,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Setup)
 	FTransform tileMeshTransform;
 
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Debug)
+	bool bDisplayCapsules = false;
+
+
 	// Sets default values for this actor's properties
 	AHexTiledBuildSurface();
 
