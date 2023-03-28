@@ -24,6 +24,27 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = SmallTiles)
 	float interCenterDistance = 10.0;
 
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Noise)
+	float noiseMapScale = 1;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Noise)
+	int seed = 0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Noise)
+	int octaves = 1;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Noise)
+	float persistance = 1;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Noise)
+	float lacunarity = 1;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Noise)
+	TArray<float> biomeRanges;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Noise)
+	TArray<UMaterial*> biomeMaterials;
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = SmallTiles)
 	float capsuleHeight = 40;
 
@@ -44,6 +65,8 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = BigTiles)
 	double bigTileScalingParameter = 0.0;
+
+	
 
 
 	// Sets default values for this actor's properties
@@ -72,4 +95,8 @@ private:
 	void UpdateSetupVariables();
 
 	void SpawnHexTiles();
+
+	static TArray<float> GenerateNoiseMap(int mapWidth, int mapHeight, int seed, float scale, int octaves, float persistance, float lacunarity);
+
+	UMaterial* assignBiome(float heightMapValue);
 };

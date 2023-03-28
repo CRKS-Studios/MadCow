@@ -80,16 +80,24 @@ void AHexTiledBuildSurface::SpawnHexTiles()
 		c->DestroyComponent();
 	}
 
+	// Generate noise map
+	TArray<float> noiseMap = GenerateNoiseMap(numHexagonWidth, numHexagonHeight, noiseMapScale, octaves, persistance, lacunarity);
+
 	for (int i = 0; i < numHexagonWidth; i++) {
 		for (int j = 0; j < numHexagonHeight; j++) {
 			FVector loc = hexCentersLocations[i * numHexagonHeight + j];
-
+			
 			// Spawn small tiles
 
-			loc.Z += FMath::FRandRange(-tileMeshTransform.GetLocation().Z, tileMeshTransform.GetLocation().Z);
+			//loc.Z += FMath::FRandRange(-tileMeshTransform.GetLocation().Z, tileMeshTransform.GetLocation().Z);
+			float noiseSample = noiseMap[j * numHexagonWidth + i];
+			loc.Z += noiseSample;
+			UE_LOG(LogTemp, Display, TEXT("buka zbuka je %f"), noiseSample)
 			FTransform newTileTransform = FTransform(tileMeshTransform.GetRotation(), loc, tileMeshTransform.GetScale3D());
 
 			FName tileName = FName(*FString::Printf(TEXT("Tile%d"), j * numHexagonWidth + i));
+
+			UMaterial* chosenMaterial = assignBiome(noiseSample);
 
 			UTileComponent* newTileComponent = NewObject<UTileComponent>(this, UTileComponent::StaticClass(), tileName);
 			newTileComponent->RegisterComponent();
@@ -98,6 +106,7 @@ void AHexTiledBuildSurface::SpawnHexTiles()
 			newTileComponent->SetStaticMesh(smallTileMesh);
 			newTileComponent->SetCollisionObjectType(ECollisionChannel::ECC_GameTraceChannel1); // set object type to PlacingZone
 			newTileComponent->SetGenerateOverlapEvents(true);
+			newTileComponent->SetMaterial(0, chosenMaterial);
 
 			// Spawn the capsule component for each tile
 
@@ -139,3 +148,62 @@ void AHexTiledBuildSurface::SpawnHexTiles()
 	}
 }
 
+/*
+Generate perlin noise map from chosen parameters
+octaves - number of times sampled / describes level of detail
+persistance - influences amplitude of signal, amplitude decreases with octave R[0, 1]
+lacunarity - influences frequency of signal, frequency increases with octave R 1+
+*/
+TArray<float> AHexTiledBuildSurface::GenerateNoiseMap(int mapWidth, int mapHeight, int seed, float scale, int octaves, float persistance, float lacunarity) {
+	TArray<float> NoiseMap = TArray<float>();
+
+	// seed
+
+
+	if (scale <= 0) {
+		scale = 0.0001f;
+	}
+
+	for (int y = 0; y < mapHeight; y++) {
+		for (int x = 0; x < mapWidth; x++) {
+
+			float amplitude = 1;
+			float frequency = 1;
+			float noiseHeight = 0;
+
+			for (int i = 0; i < octaves; i++) {
+				FVector2D samplePos = FVector2D(x / scale * frequency, y / scale * frequency);
+
+				float perlinValue = FMath::PerlinNoise2D(samplePos);
+				noiseHeight += perlinValue * amplitude;
+
+				amplitude *= persistance;
+				frequency *= lacunarity;
+			}
+			// add height in range 0 - 1
+			// nisam sigurna da li je to bolje al avaj
+			NoiseMap.Add((noiseHeight + 1.0f) / 2.0f);
+		}
+	}
+
+	return NoiseMap;
+}
+
+/*
+Assigns material reference to specific tile given its height value
+*/
+UMaterial* AHexTiledBuildSurface::assignBiome(float heightMapValue) {
+	if (heightMapValue < biomeRanges[0]) {
+		return biomeMaterials[0];
+	}
+	else if (heightMapValue >= biomeRanges[0] && heightMapValue < biomeRanges[1]) {
+		return biomeMaterials[1];
+	}
+	else if (heightMapValue >= biomeRanges[1] && heightMapValue < biomeRanges[2]) {
+		return biomeMaterials[2];
+	}
+	else if (heightMapValue >= biomeRanges[2] && heightMapValue < biomeRanges[3]) {
+		return biomeMaterials[3];
+	}
+	return biomeMaterials[4];
+}
