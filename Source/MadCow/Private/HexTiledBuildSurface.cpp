@@ -50,7 +50,8 @@ TArray<FVector> AHexTiledBuildSurface::getHexCentersCoords()
 
 void AHexTiledBuildSurface::UpdateSetupVariables()
 {
-	this->interLayerDistance = (std::sqrt(3) / 2) * interCenterDistance;
+	this->interLayerDistance = (UE_DOUBLE_SQRT_3 / 2) * interCenterDistance;
+	this->centerCornerDistance = interCenterDistance / UE_DOUBLE_SQRT_3;
 
 	hexCentersLocations.Empty();
 	hexCentersLocations = TArray<FVector>();
@@ -61,7 +62,7 @@ void AHexTiledBuildSurface::UpdateSetupVariables()
 				hexCentersLocations.Add(FVector(i * this->interCenterDistance, j * interLayerDistance, 0.0));
 			}
 			else {
-				if (i == numHexagonWidth - 1) continue;
+				// if (i == numHexagonWidth - 1) continue;
 
 				hexCentersLocations.Add(FVector((i + 0.5) * this->interCenterDistance, j * interLayerDistance, 0.0));
 			}
@@ -79,35 +80,62 @@ void AHexTiledBuildSurface::SpawnHexTiles()
 		c->DestroyComponent();
 	}
 
-	int i = 0;
-	for (FVector loc : hexCentersLocations) {
-		loc.Z += FMath::FRandRange(-tileMeshTransform.GetLocation().Z, tileMeshTransform.GetLocation().Z);
-		FTransform newCompTransform = FTransform(tileMeshTransform.GetRotation(), loc, tileMeshTransform.GetScale3D());
+	for (int i = 0; i < numHexagonWidth; i++) {
+		for (int j = 0; j < numHexagonHeight; j++) {
+			FVector loc = hexCentersLocations[i * numHexagonHeight + j];
 
-		FName tileName = FName(*FString::Printf(TEXT("Tile%d"), i));
+			// Spawn small tiles
 
-		UTileComponent* newTileComponent = NewObject<UTileComponent>(this, UTileComponent::StaticClass(), tileName);
-		newTileComponent->RegisterComponent();
-		newTileComponent->AttachToComponent(GetRootComponent(), FAttachmentTransformRules::KeepRelativeTransform);
-		newTileComponent->SetRelativeTransform(newCompTransform);
-		newTileComponent->SetStaticMesh(tileMesh);
-		newTileComponent->SetCollisionObjectType(ECollisionChannel::ECC_GameTraceChannel1); // set object type to PlacingZone
-		newTileComponent->SetGenerateOverlapEvents(true);
+			loc.Z += FMath::FRandRange(-tileMeshTransform.GetLocation().Z, tileMeshTransform.GetLocation().Z);
+			FTransform newTileTransform = FTransform(tileMeshTransform.GetRotation(), loc, tileMeshTransform.GetScale3D());
 
-		float radius = interCenterDistance / 2;
-		FTransform newerCompTransform = FTransform(FRotator(),FVector(0, 0, capsuleHeight), FVector(1 / tileMeshTransform.GetScale3D().X, 1 / tileMeshTransform.GetScale3D().Y, 1 / tileMeshTransform.GetScale3D().Z));
+			FName tileName = FName(*FString::Printf(TEXT("Tile%d"), j * numHexagonWidth + i));
 
-		FName capsuleName = FName(*FString::Printf(TEXT("TileCapsule%d"), i));
+			UTileComponent* newTileComponent = NewObject<UTileComponent>(this, UTileComponent::StaticClass(), tileName);
+			newTileComponent->RegisterComponent();
+			newTileComponent->AttachToComponent(GetRootComponent(), FAttachmentTransformRules::KeepRelativeTransform);
+			newTileComponent->SetRelativeTransform(newTileTransform);
+			newTileComponent->SetStaticMesh(smallTileMesh);
+			newTileComponent->SetCollisionObjectType(ECollisionChannel::ECC_GameTraceChannel1); // set object type to PlacingZone
+			newTileComponent->SetGenerateOverlapEvents(true);
 
-		UCapsuleComponent* newCapsuleComponent = NewObject<UCapsuleComponent>(this, UCapsuleComponent::StaticClass(), capsuleName);
-		newCapsuleComponent->RegisterComponent();
-		newCapsuleComponent->SetCapsuleSize(radius, capsuleHeight);
-		newCapsuleComponent->AttachToComponent(newTileComponent, FAttachmentTransformRules::KeepRelativeTransform);
-		newCapsuleComponent->SetRelativeTransform(newerCompTransform);
-		newCapsuleComponent->SetCollisionObjectType(ECollisionChannel::ECC_GameTraceChannel3); // set object type to BuildCollision
-		newCapsuleComponent->SetGenerateOverlapEvents(true);
+			// Spawn the capsule component for each tile
 
-		i++;
+			float radius = interCenterDistance / 2;
+			FTransform newerCompTransform = FTransform(FRotator(), FVector(0, 0, capsuleHeight), FVector(1 / tileMeshTransform.GetScale3D().X, 1 / tileMeshTransform.GetScale3D().Y, 1 / tileMeshTransform.GetScale3D().Z));
+
+			FName capsuleName = FName(*FString::Printf(TEXT("TileCapsule%d"), j * numHexagonWidth + i));
+
+			UCapsuleComponent* newCapsuleComponent = NewObject<UCapsuleComponent>(this, UCapsuleComponent::StaticClass(), capsuleName);
+			newCapsuleComponent->RegisterComponent();
+			newCapsuleComponent->SetCapsuleSize(radius, capsuleHeight);
+			newCapsuleComponent->AttachToComponent(newTileComponent, FAttachmentTransformRules::KeepRelativeTransform);
+			newCapsuleComponent->SetRelativeTransform(newerCompTransform);
+			newCapsuleComponent->SetCollisionObjectType(ECollisionChannel::ECC_GameTraceChannel3); // set object type to BuildCollision
+			newCapsuleComponent->SetGenerateOverlapEvents(true);
+
+			if (!bDisplayCapsules) {
+				newCapsuleComponent->SetVisibility(false);
+			}
+
+			bool expression = (j % 4 == 0) ? (i % 2 == 0) : (i % 2 == 1);
+			// Spawn big hex tiles with a probability
+			if (j % 2 == 0 && expression && FMath::FRandRange(0.0, 100.0) < bigTileSpawnRate) {
+				FVector v = loc;
+				v.Y -= centerCornerDistance;
+				v.Z = tileMeshTransform.GetLocation().Z + 1;
+				FTransform newBigTileTransform = FTransform(tileMeshTransform.GetRotation(), v, tileMeshTransform.GetScale3D() * (2.0 + bigTileScalingParameter));
+
+
+				FName bigTileName = FName(*FString::Printf(TEXT("BigTile%d"), j * numHexagonWidth + i));
+
+				UTileComponent* newBigTileComponent = NewObject<UTileComponent>(this, UTileComponent::StaticClass(), bigTileName);
+				newBigTileComponent->RegisterComponent();
+				newBigTileComponent->AttachToComponent(GetRootComponent(), FAttachmentTransformRules::KeepRelativeTransform);
+				newBigTileComponent->SetRelativeTransform(newBigTileTransform);
+				newBigTileComponent->SetStaticMesh(bigTileMesh);
+			}
+		}
 	}
 }
 

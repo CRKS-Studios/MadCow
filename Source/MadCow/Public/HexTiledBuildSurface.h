@@ -15,23 +15,36 @@ class MADCOW_API AHexTiledBuildSurface : public AActor
 	
 
 public:	
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Setup)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = SmallTiles)
 	int64 numHexagonWidth = 10;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Setup)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = SmallTiles)
 	int64 numHexagonHeight = 10;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Setup)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = SmallTiles)
 	float interCenterDistance = 10.0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Setup)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = SmallTiles)
 	float capsuleHeight = 40;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Setup)
-	UStaticMesh* tileMesh;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = SmallTiles)
+	UStaticMesh* smallTileMesh;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Setup)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = SmallTiles)
 	FTransform tileMeshTransform;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Debug)
+	bool bDisplayCapsules = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = BigTiles)
+	float bigTileSpawnRate = 10.0;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = BigTiles)
+	UStaticMesh* bigTileMesh;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = BigTiles)
+	double bigTileScalingParameter = 0.0;
+
 
 	// Sets default values for this actor's properties
 	AHexTiledBuildSurface();
@@ -51,7 +64,8 @@ public:
 	TArray<FVector> getHexCentersCoords();
 
 private:
-	float interLayerDistance = (std::sqrt(3) / 2) * interCenterDistance;
+	float interLayerDistance = (UE_DOUBLE_SQRT_3 / 2) * interCenterDistance;
+	float centerCornerDistance = interCenterDistance / UE_DOUBLE_SQRT_3;
 
 	TArray<FVector> hexCentersLocations;
 
