@@ -31,6 +31,9 @@ public:
 	int seed = 0;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Noise)
+	FVector2D offset = FVector2D(0, 0);
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Noise)
 	int octaves = 1;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Noise)
@@ -44,6 +47,21 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Noise)
 	TArray<UMaterial*> biomeMaterials;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Noise)
+	float heightMultiplier = 1;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Noise)
+	bool useMeshHeightCurve = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Noise)
+	UCurveFloat* meshHeightCurve;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Noise)
+	bool useCustomHeightmap = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Noise)
+	UTexture2D* customHeightmap;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = SmallTiles)
 	float capsuleHeight = 40;
@@ -66,7 +84,14 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = BigTiles)
 	double bigTileScalingParameter = 0.0;
 
-	
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Biomes)
+	TArray<UStaticMesh*> trees;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Biomes)
+	UStaticMesh* mountain;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Biomes)
+	FTransform detailMeshTransform;
 
 
 	// Sets default values for this actor's properties
@@ -96,7 +121,9 @@ private:
 
 	void SpawnHexTiles();
 
-	static TArray<float> GenerateNoiseMap(int mapWidth, int mapHeight, int seed, float scale, int octaves, float persistance, float lacunarity);
+	static TArray<float> GenerateNoiseMap(int mapWidth, int mapHeight, int seed, FVector2D offset, float scale, int octaves, float persistance, float lacunarity);
+	static TArray<float> SampleExistingNoiseMap(UTexture2D* texture, int mapWidth, int mapHeight);
 
 	UMaterial* assignBiome(float heightMapValue);
+	UStaticMesh* assignBiomeDetails(float heightMapValue);
 };

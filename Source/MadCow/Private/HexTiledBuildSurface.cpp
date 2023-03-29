@@ -1,12 +1,11 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
-
+#include "HexTiledBuildSurface.h"
 #include "Components/SceneComponent.h"
 #include "TileComponent.h"
 #include "Engine/StaticMesh.h"
 #include "Components/CapsuleComponent.h"
 #include "Math/TransformCalculus3D.h"
-#include "HexTiledBuildSurface.h"
 
 // Sets default values
 AHexTiledBuildSurface::AHexTiledBuildSurface()
@@ -81,7 +80,18 @@ void AHexTiledBuildSurface::SpawnHexTiles()
 	}
 
 	// Generate noise map
-	TArray<float> noiseMap = GenerateNoiseMap(numHexagonWidth, numHexagonHeight, noiseMapScale, octaves, persistance, lacunarity);
+	TArray<float> noiseMap;
+
+	if (!useCustomHeightmap) {
+		noiseMap = GenerateNoiseMap(numHexagonWidth, numHexagonHeight, seed, offset, noiseMapScale, octaves, persistance, lacunarity);
+	}
+	else {
+		// set height and width to texture size 
+		numHexagonWidth = customHeightmap->GetSizeX();
+		numHexagonHeight = customHeightmap->GetSizeY();
+		// sample texture at each point
+		noiseMap = SampleExistingNoiseMap(customHeightmap, numHexagonWidth, numHexagonHeight);
+	}
 
 	for (int i = 0; i < numHexagonWidth; i++) {
 		for (int j = 0; j < numHexagonHeight; j++) {
@@ -91,9 +101,16 @@ void AHexTiledBuildSurface::SpawnHexTiles()
 
 			//loc.Z += FMath::FRandRange(-tileMeshTransform.GetLocation().Z, tileMeshTransform.GetLocation().Z);
 			float noiseSample = noiseMap[j * numHexagonWidth + i];
-			loc.Z += noiseSample;
+			//loc.Z += noiseSample;
 			UE_LOG(LogTemp, Display, TEXT("buka zbuka je %f"), noiseSample)
-			FTransform newTileTransform = FTransform(tileMeshTransform.GetRotation(), loc, tileMeshTransform.GetScale3D());
+
+			FVector scale = tileMeshTransform.GetScale3D();
+			scale.Z = noiseSample * heightMultiplier;
+			if (useMeshHeightCurve) {
+				scale.Z *= meshHeightCurve->GetFloatValue(noiseSample);
+			}
+
+			FTransform newTileTransform = FTransform(tileMeshTransform.GetRotation(), loc, scale);
 
 			FName tileName = FName(*FString::Printf(TEXT("Tile%d"), j * numHexagonWidth + i));
 
@@ -133,8 +150,14 @@ void AHexTiledBuildSurface::SpawnHexTiles()
 				FVector v = loc;
 				v.Y -= centerCornerDistance;
 				v.Z = tileMeshTransform.GetLocation().Z + 1;
-				FTransform newBigTileTransform = FTransform(tileMeshTransform.GetRotation(), v, tileMeshTransform.GetScale3D() * (2.0 + bigTileScalingParameter));
 
+				FVector scaleBig = tileMeshTransform.GetScale3D() * (2.0 + bigTileScalingParameter);
+				scaleBig.Z = noiseSample * heightMultiplier;
+				if(useMeshHeightCurve) {
+					scaleBig.Z *= meshHeightCurve->GetFloatValue(noiseSample);
+				}
+
+				FTransform newBigTileTransform = FTransform(tileMeshTransform.GetRotation(), v, scaleBig);
 
 				FName bigTileName = FName(*FString::Printf(TEXT("BigTile%d"), j * numHexagonWidth + i));
 
@@ -143,6 +166,19 @@ void AHexTiledBuildSurface::SpawnHexTiles()
 				newBigTileComponent->AttachToComponent(GetRootComponent(), FAttachmentTransformRules::KeepRelativeTransform);
 				newBigTileComponent->SetRelativeTransform(newBigTileTransform);
 				newBigTileComponent->SetStaticMesh(bigTileMesh);
+				newBigTileComponent->SetMaterial(0, chosenMaterial);
+
+				/*if (noiseSample >= biomeRanges[1]) {
+					UStaticMesh* meshToSpawn = assignBiomeDetails(noiseSample);
+
+					UTileComponent* spawnedDetail = NewObject<UTileComponent>(this, UTileComponent::StaticClass(), bigTileName);
+					spawnedDetail->RegisterComponent();
+					spawnedDetail->AttachToComponent(newBigTileComponent, FAttachmentTransformRules::SnapToTargetNotIncludingScale);
+					spawnedDetail->SetRelativeTransform(detailMeshTransform);
+					spawnedDetail->SetStaticMesh(meshToSpawn);
+				}*/
+
+				// ((ovo za big nije bazirano na sve tri nego samo jednoj malo varam))
 			}
 		}
 	}
@@ -154,11 +190,18 @@ octaves - number of times sampled / describes level of detail
 persistance - influences amplitude of signal, amplitude decreases with octave R[0, 1]
 lacunarity - influences frequency of signal, frequency increases with octave R 1+
 */
-TArray<float> AHexTiledBuildSurface::GenerateNoiseMap(int mapWidth, int mapHeight, int seed, float scale, int octaves, float persistance, float lacunarity) {
+TArray<float> AHexTiledBuildSurface::GenerateNoiseMap(int mapWidth, int mapHeight, int seed, FVector2D offset, float scale, int octaves, float persistance, float lacunarity) {
 	TArray<float> NoiseMap = TArray<float>();
 
 	// seed
-
+	FMath::RandInit(seed);
+	// sample octaves at random points
+	TArray<FVector2D> octaveOffsets = TArray<FVector2D>(); //size = nr of octaves
+	for (int i = 0; i < octaves; i++) {
+		float offsetX = FMath::RandRange(-10000, 10000) + offset.X;
+		float offsetY = FMath::RandRange(-10000, 10000) + offset.Y;
+		octaveOffsets.Add(FVector2D(offsetX, offsetY));
+	}
 
 	if (scale <= 0) {
 		scale = 0.0001f;
@@ -172,7 +215,7 @@ TArray<float> AHexTiledBuildSurface::GenerateNoiseMap(int mapWidth, int mapHeigh
 			float noiseHeight = 0;
 
 			for (int i = 0; i < octaves; i++) {
-				FVector2D samplePos = FVector2D(x / scale * frequency, y / scale * frequency);
+				FVector2D samplePos = FVector2D(x / scale * frequency + octaveOffsets[i].X, y / scale * frequency + octaveOffsets[i].Y);
 
 				float perlinValue = FMath::PerlinNoise2D(samplePos);
 				noiseHeight += perlinValue * amplitude;
@@ -181,10 +224,41 @@ TArray<float> AHexTiledBuildSurface::GenerateNoiseMap(int mapWidth, int mapHeigh
 				frequency *= lacunarity;
 			}
 			// add height in range 0 - 1
-			// nisam sigurna da li je to bolje al avaj
+			// nisam sigurna da li je to bolje al avaj problem za poslije hihi
 			NoiseMap.Add((noiseHeight + 1.0f) / 2.0f);
 		}
 	}
+
+	return NoiseMap;
+}
+
+/*
+Za sad ne valja nis 
+*/
+TArray<float> AHexTiledBuildSurface::SampleExistingNoiseMap(UTexture2D* texture, int mapWidth, int mapHeight) {
+	TArray<float> NoiseMap = TArray<float>();
+	if (!texture) return NoiseMap;
+
+	if (!texture->PlatformData) {
+		UE_LOG(LogTemp, Error, TEXT("SampleExistingNoiseMap: texture's PlatformData is null"));
+		return NoiseMap;
+	}
+
+	// mipmaps <3
+	FTexture2DMipMap* mip = &texture->PlatformData->Mips[0];
+	FByteBulkData* raw = &mip->BulkData;
+	FColor* mipData = static_cast<FColor*>(raw->Lock(LOCK_READ_ONLY));
+
+	for (int y = 0; y < mapHeight; y++) {
+		for (int x = 0; x < mapWidth; x++) {
+			FColor color = mipData[y * mapWidth + x];
+
+			float sampledColor = (color.R + color.G + color.B) / 3.0f;
+			NoiseMap.Add(sampledColor);
+		}
+	}
+
+	raw->Unlock();
 
 	return NoiseMap;
 }
@@ -200,10 +274,23 @@ UMaterial* AHexTiledBuildSurface::assignBiome(float heightMapValue) {
 		return biomeMaterials[1];
 	}
 	else if (heightMapValue >= biomeRanges[1] && heightMapValue < biomeRanges[2]) {
-		return biomeMaterials[2];
-	}
-	else if (heightMapValue >= biomeRanges[2] && heightMapValue < biomeRanges[3]) {
+		// grass should be on same level so that map is smoother
+		bool pick = FMath::RandBool();
+		if (pick) {
+			return biomeMaterials[2];
+		}
 		return biomeMaterials[3];
 	}
 	return biomeMaterials[4];
+}
+
+UStaticMesh* AHexTiledBuildSurface::assignBiomeDetails(float heightMapValue) {
+
+	if (heightMapValue >= biomeRanges[1] && heightMapValue < biomeRanges[2]) {
+		int random = FMath::RandRange(0, trees.Num() - 1);
+
+		return trees[random];
+	}
+	
+	return mountain;
 }
