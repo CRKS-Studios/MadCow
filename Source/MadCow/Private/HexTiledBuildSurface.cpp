@@ -6,6 +6,7 @@
 #include "Engine/StaticMesh.h"
 #include "Components/CapsuleComponent.h"
 #include "Math/TransformCalculus3D.h"
+#include "Engine/StaticMeshActor.h" 
 
 // Sets default values
 AHexTiledBuildSurface::AHexTiledBuildSurface()
@@ -26,6 +27,7 @@ void AHexTiledBuildSurface::BeginPlay()
 {
 	Super::BeginPlay();	
 	UpdateSetupVariables();
+	WipeOnStart();
 	SpawnHexTiles();
 }
 
@@ -33,6 +35,7 @@ void AHexTiledBuildSurface::OnConstruction(const FTransform& Transform)
 {
 	Super::OnConstruction(Transform);
 	UpdateSetupVariables();
+	WipeOnStart();
 	SpawnHexTiles();
 }
 
@@ -71,14 +74,6 @@ void AHexTiledBuildSurface::UpdateSetupVariables()
 
 void AHexTiledBuildSurface::SpawnHexTiles()
 {
-	TArray<USceneComponent*, FDefaultAllocator> children = TArray<USceneComponent*, FDefaultAllocator>();
-	GetRootComponent()->GetChildrenComponents(true, children);
-
-	for (auto c : children) {
-		c->DetachFromParent();
-		c->DestroyComponent();
-	}
-
 	// Generate noise map
 	TArray<float> noiseMap;
 
@@ -87,27 +82,32 @@ void AHexTiledBuildSurface::SpawnHexTiles()
 	}
 	else {
 		// set height and width to texture size 
-		numHexagonWidth = customHeightmap->GetSizeX();
-		numHexagonHeight = customHeightmap->GetSizeY();
+		numHexagonHeight = customHeightmap->GetSizeX();
+		numHexagonWidth = customHeightmap->GetSizeY();
+		UpdateSetupVariables();
 		// sample texture at each point
 		noiseMap = SampleExistingNoiseMap(customHeightmap, numHexagonWidth, numHexagonHeight);
 	}
 
-	for (int i = 0; i < numHexagonWidth; i++) {
-		for (int j = 0; j < numHexagonHeight; j++) {
-			FVector loc = hexCentersLocations[i * numHexagonHeight + j];
+	for (int j = 0; j < numHexagonHeight; j++) {
+		for (int i = 0; i < numHexagonWidth; i++) {
+			FVector loc = hexCentersLocations[j * numHexagonWidth + i];
 			
 			// Spawn small tiles
 
-			//loc.Z += FMath::FRandRange(-tileMeshTransform.GetLocation().Z, tileMeshTransform.GetLocation().Z);
 			float noiseSample = noiseMap[j * numHexagonWidth + i];
 			//loc.Z += noiseSample;
-			UE_LOG(LogTemp, Display, TEXT("buka zbuka je %f"), noiseSample)
+			/*if (i == numHexagonWidth - 1) {
+				UE_LOG(LogTemp, Display, TEXT("buka zbuka je %f"), noiseSample);
+			}*/
 
 			FVector scale = tileMeshTransform.GetScale3D();
 			scale.Z = noiseSample * heightMultiplier;
 			if (useMeshHeightCurve) {
 				scale.Z *= meshHeightCurve->GetFloatValue(noiseSample);
+			}
+			if (scale.Z <= smallestScale) {
+				scale.Z = smallestScale;
 			}
 
 			FTransform newTileTransform = FTransform(tileMeshTransform.GetRotation(), loc, scale);
@@ -156,6 +156,9 @@ void AHexTiledBuildSurface::SpawnHexTiles()
 				if(useMeshHeightCurve) {
 					scaleBig.Z *= meshHeightCurve->GetFloatValue(noiseSample);
 				}
+				if (scaleBig.Z <= smallestScale) {
+					scaleBig.Z = smallestScale;
+				}
 
 				FTransform newBigTileTransform = FTransform(tileMeshTransform.GetRotation(), v, scaleBig);
 
@@ -168,15 +171,15 @@ void AHexTiledBuildSurface::SpawnHexTiles()
 				newBigTileComponent->SetStaticMesh(bigTileMesh);
 				newBigTileComponent->SetMaterial(0, chosenMaterial);
 
-				/*if (noiseSample >= biomeRanges[1]) {
+				if (noiseSample >= biomeRanges[1]) {
 					UStaticMesh* meshToSpawn = assignBiomeDetails(noiseSample);
+					FTransform detailTransform = FTransform(newBigTileTransform.GetRotation(), v + scaleBig.Z / 2.0f, detailMeshTransform.GetScale3D());
 
-					UTileComponent* spawnedDetail = NewObject<UTileComponent>(this, UTileComponent::StaticClass(), bigTileName);
-					spawnedDetail->RegisterComponent();
-					spawnedDetail->AttachToComponent(newBigTileComponent, FAttachmentTransformRules::SnapToTargetNotIncludingScale);
-					spawnedDetail->SetRelativeTransform(detailMeshTransform);
-					spawnedDetail->SetStaticMesh(meshToSpawn);
-				}*/
+					AStaticMeshActor* spawnedDetail = GetWorld()->SpawnActor<AStaticMeshActor>(AStaticMeshActor::StaticClass(), detailTransform);
+					spawnedDetail->GetStaticMeshComponent()->SetStaticMesh(meshToSpawn);
+
+					spawnedDetails.Add(spawnedDetail);
+				}
 
 				// ((ovo za big nije bazirano na sve tri nego samo jednoj malo varam))
 			}
@@ -233,7 +236,7 @@ TArray<float> AHexTiledBuildSurface::GenerateNoiseMap(int mapWidth, int mapHeigh
 }
 
 /*
-Za sad ne valja nis 
+Za sad valja aaaa jesam te zajebala 
 */
 TArray<float> AHexTiledBuildSurface::SampleExistingNoiseMap(UTexture2D* texture, int mapWidth, int mapHeight) {
 	TArray<float> NoiseMap = TArray<float>();
@@ -248,17 +251,59 @@ TArray<float> AHexTiledBuildSurface::SampleExistingNoiseMap(UTexture2D* texture,
 	FTexture2DMipMap* mip = &texture->PlatformData->Mips[0];
 	FByteBulkData* raw = &mip->BulkData;
 	FColor* mipData = static_cast<FColor*>(raw->Lock(LOCK_READ_ONLY));
+	FColor mipCopy[5000];
+	memcpy(&mipCopy, mipData, mapHeight * mapWidth * sizeof(FColor));
 
 	for (int y = 0; y < mapHeight; y++) {
+		FString buf = "";
 		for (int x = 0; x < mapWidth; x++) {
 			FColor color = mipData[y * mapWidth + x];
 
-			float sampledColor = (color.R + color.G + color.B) / 3.0f;
+			//UE_LOG(LogTemp, Display, TEXT("boja je %s"), *color.ToString());
+
+			float sampledColor = ((color.R + color.G + color.B) / 255.0f) / 3.0f;
+			buf.Appendf(TEXT("%f "), sampledColor);
 			NoiseMap.Add(sampledColor);
 		}
+
+		UE_LOG(LogTemp, Warning, TEXT("%s"), *buf);
 	}
 
-	raw->Unlock();
+	raw->Unlock();	
+
+	/*TextureCompressionSettings OldCompressionSettings = texture->CompressionSettings; 
+	TextureMipGenSettings OldMipGenSettings = texture->MipGenSettings; 
+	bool OldSRGB = texture->SRGB;
+
+	texture->CompressionSettings = TextureCompressionSettings::TC_VectorDisplacementmap;
+	texture->MipGenSettings = TextureMipGenSettings::TMGS_NoMipmaps;
+	texture->SRGB = false;
+	texture->UpdateResource();
+
+	const FColor* FormatedImageData = static_cast<const FColor*>(texture->PlatformData->Mips[0].BulkData.LockReadOnly());
+
+	int32 x = texture->GetSizeX();
+	int32 y = texture->GetSizeY();
+
+	for (int32 X = 0; X < texture->GetSizeX(); X++)
+	{
+		FString buf = "";
+		for (int32 Y = 0; Y < texture->GetSizeY(); Y++)
+		{
+			FColor PixelColor = FormatedImageData[Y * texture->GetSizeX() + X];
+			float sampledColor = ((PixelColor.R + PixelColor.G + PixelColor.B) / 255.0f) / 3.0f;
+			buf.Appendf(TEXT("%d "), PixelColor.R);
+			NoiseMap.Add(sampledColor);
+		}
+		UE_LOG(LogTemp, Warning, TEXT("%s"), *buf);
+	}
+
+	texture->PlatformData->Mips[0].BulkData.Unlock();
+
+	texture->CompressionSettings = OldCompressionSettings;
+	texture->MipGenSettings = OldMipGenSettings;
+	texture->SRGB = OldSRGB;
+	texture->UpdateResource();*/
 
 	return NoiseMap;
 }
@@ -293,4 +338,22 @@ UStaticMesh* AHexTiledBuildSurface::assignBiomeDetails(float heightMapValue) {
 	}
 	
 	return mountain;
+}
+
+
+void AHexTiledBuildSurface::WipeOnStart() {
+	TArray<USceneComponent*, FDefaultAllocator> children = TArray<USceneComponent*, FDefaultAllocator>();
+	GetRootComponent()->GetChildrenComponents(true, children);
+
+	for (auto c : children) {
+		c->DetachFromParent();
+		c->DestroyComponent();
+	}
+
+	if (spawnedDetails.Num() != 0) {
+		for (auto d : spawnedDetails) {
+			d->Destroy();
+		}
+		spawnedDetails.Empty();
+	}
 }

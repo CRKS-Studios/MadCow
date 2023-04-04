@@ -63,6 +63,9 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Noise)
 	UTexture2D* customHeightmap;
 
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Noise)
+	float smallestScale = 0.001;
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = SmallTiles)
 	float capsuleHeight = 40;
 
@@ -74,6 +77,8 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Debug)
 	bool bDisplayCapsules = false;
+
+
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = BigTiles)
 	float bigTileSpawnRate = 10.0;
@@ -126,4 +131,8 @@ private:
 
 	UMaterial* assignBiome(float heightMapValue);
 	UStaticMesh* assignBiomeDetails(float heightMapValue);
+
+	TArray<AActor*> spawnedDetails;
+
+	void WipeOnStart();
 };
