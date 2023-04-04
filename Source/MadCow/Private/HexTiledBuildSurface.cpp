@@ -159,7 +159,7 @@ void AHexTiledBuildSurface::SpawnHexTiles()
 				if (scaleBig.Z <= smallestScale) {
 					scaleBig.Z = smallestScale;
 				}
-
+				
 				FTransform newBigTileTransform = FTransform(tileMeshTransform.GetRotation(), v, scaleBig);
 
 				FName bigTileName = FName(*FString::Printf(TEXT("BigTile%d"), j * numHexagonWidth + i));
@@ -172,8 +172,11 @@ void AHexTiledBuildSurface::SpawnHexTiles()
 				newBigTileComponent->SetMaterial(0, chosenMaterial);
 
 				if (noiseSample >= biomeRanges[1]) {
+					// get surface socket transform
+					FVector socketPos = newBigTileComponent->GetSocketLocation(FName("Surface_Socket"));
+
 					UStaticMesh* meshToSpawn = assignBiomeDetails(noiseSample);
-					FTransform detailTransform = FTransform(newBigTileTransform.GetRotation(), v + scaleBig.Z / 2.0f, detailMeshTransform.GetScale3D());
+					FTransform detailTransform = FTransform(newBigTileTransform.GetRotation(), socketPos, detailMeshTransform.GetScale3D());
 
 					AStaticMeshActor* spawnedDetail = GetWorld()->SpawnActor<AStaticMeshActor>(AStaticMeshActor::StaticClass(), detailTransform);
 					spawnedDetail->GetStaticMeshComponent()->SetStaticMesh(meshToSpawn);
