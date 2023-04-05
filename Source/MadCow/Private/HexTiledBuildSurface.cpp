@@ -76,6 +76,7 @@ void AHexTiledBuildSurface::SpawnHexTiles()
 {
 	// Generate noise map
 	TArray<float> noiseMap;
+	TArray<float> falloffMap;
 
 	if (!useCustomHeightmap) {
 		noiseMap = GenerateNoiseMap(numHexagonWidth, numHexagonHeight, seed, offset, noiseMapScale, octaves, persistance, lacunarity);
@@ -89,6 +90,8 @@ void AHexTiledBuildSurface::SpawnHexTiles()
 		noiseMap = SampleExistingNoiseMap(customHeightmap, numHexagonWidth, numHexagonHeight);
 	}
 
+	if (useFalloffMap) falloffMap = GenerateFalloffMap(numHexagonWidth, numHexagonHeight, curveSlope, curveOffset);
+
 	for (int j = 0; j < numHexagonHeight; j++) {
 		for (int i = 0; i < numHexagonWidth; i++) {
 			FVector loc = hexCentersLocations[j * numHexagonWidth + i];
@@ -96,6 +99,7 @@ void AHexTiledBuildSurface::SpawnHexTiles()
 			// Spawn small tiles
 
 			float noiseSample = noiseMap[j * numHexagonWidth + i];
+			if (useFalloffMap) noiseSample -= falloffMap[j * numHexagonWidth + i];
 			//loc.Z += noiseSample;
 			/*if (i == numHexagonWidth - 1) {
 				UE_LOG(LogTemp, Display, TEXT("buka zbuka je %f"), noiseSample);
@@ -236,6 +240,31 @@ TArray<float> AHexTiledBuildSurface::GenerateNoiseMap(int mapWidth, int mapHeigh
 	}
 
 	return NoiseMap;
+}
+
+/*
+Subtract this from the noise map to create an "island" noise map, surrounded with water
+*/
+TArray<float> AHexTiledBuildSurface::GenerateFalloffMap(int mapWidth, int mapHeight, float curveSlope, float curveOffset) {
+	TArray<float> FalloffMap = TArray<float>();
+
+	for (int y = 0; y < mapHeight; y++) {
+		for (int x = 0; x < mapWidth; x++) {
+			// range -1 to 1
+			float xCoord = (x / (mapWidth * 1.0f)) * 2 - 1;
+			float yCoord = (y / (mapHeight * 1.0f)) * 2 - 1;
+
+			float closestToEdge = FMath::Max(FMath::Abs(xCoord), FMath::Abs(yCoord));
+
+			// apply curve (function), resulting in a smoother map with more regions / less water
+			float finalValue = FMath::Pow(closestToEdge, curveSlope) / (FMath::Pow(closestToEdge, curveSlope) 
+				+ FMath::Pow(curveOffset * (1 - closestToEdge), curveSlope));
+
+			FalloffMap.Add(finalValue);
+		}
+	}
+
+	return FalloffMap;
 }
 
 /*

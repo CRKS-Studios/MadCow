@@ -66,6 +66,15 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Noise)
 	float smallestScale = 0.001;
 
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Noise)
+	bool useFalloffMap = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Noise)
+	float curveSlope = 3;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Noise)
+	float curveOffset = 2.2f;
+
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = SmallTiles)
 	float capsuleHeight = 40;
 
@@ -77,8 +86,6 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Debug)
 	bool bDisplayCapsules = false;
-
-
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = BigTiles)
 	float bigTileSpawnRate = 10.0;
@@ -128,6 +135,7 @@ private:
 
 	static TArray<float> GenerateNoiseMap(int mapWidth, int mapHeight, int seed, FVector2D offset, float scale, int octaves, float persistance, float lacunarity);
 	static TArray<float> SampleExistingNoiseMap(UTexture2D* texture, int mapWidth, int mapHeight);
+	static TArray<float> GenerateFalloffMap(int mapWidth, int mapHeight, float curveSlope, float curveOffset);
 
 	UMaterial* assignBiome(float heightMapValue);
 	UStaticMesh* assignBiomeDetails(float heightMapValue);
