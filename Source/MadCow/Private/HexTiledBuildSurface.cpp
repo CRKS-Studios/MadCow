@@ -50,6 +50,11 @@ TArray<FVector> AHexTiledBuildSurface::getHexCentersCoords()
 	return this->hexCentersLocations;
 }
 
+TArray<float> AHexTiledBuildSurface::getCustomHeightMap_Implementation(UTextureRenderTarget2D* renderTargetToWrite, UMaterial* renderTargetMaterialToWrite, UTexture2D* texture)
+{
+	return TArray<float>();
+}
+
 void AHexTiledBuildSurface::UpdateSetupVariables()
 {
 	this->interLayerDistance = (UE_DOUBLE_SQRT_3 / 2) * interCenterDistance;
@@ -79,18 +84,30 @@ void AHexTiledBuildSurface::SpawnHexTiles()
 	TArray<float> falloffMap;
 
 	if (!useCustomHeightmap) {
+		WipeOnStart();
 		noiseMap = GenerateNoiseMap(numHexagonWidth, numHexagonHeight, seed, offset, noiseMapScale, octaves, persistance, lacunarity);
 	}
 	else {
+		WipeOnStart();
 		// set height and width to texture size 
 		numHexagonHeight = customHeightmap->GetSizeX();
 		numHexagonWidth = customHeightmap->GetSizeY();
 		UpdateSetupVariables();
 		// sample texture at each point
-		noiseMap = SampleExistingNoiseMap(customHeightmap, numHexagonWidth, numHexagonHeight);
+		noiseMap = getCustomHeightMap(renderTarget, renderTargetMaterial, customHeightmap);
 	}
 
 	if (useFalloffMap) falloffMap = GenerateFalloffMap(numHexagonWidth, numHexagonHeight, curveSlope, curveOffset);
+
+	if (noiseMap.Num() == 0) {
+		UE_LOG(LogTemp, Display, TEXT("noise map did not load"));
+		return;
+	}
+
+	if (numHexagonWidth * numHexagonHeight >= 1024 * 1024) {
+		UE_LOG(LogTemp, Display, TEXT("the computer is going to explode"));
+		return;
+	}
 
 	for (int j = 0; j < numHexagonHeight; j++) {
 		for (int i = 0; i < numHexagonWidth; i++) {
@@ -118,8 +135,6 @@ void AHexTiledBuildSurface::SpawnHexTiles()
 
 			FName tileName = FName(*FString::Printf(TEXT("Tile%d"), j * numHexagonWidth + i));
 
-			UMaterial* chosenMaterial = assignBiome(noiseSample);
-
 			UTileComponent* newTileComponent = NewObject<UTileComponent>(this, UTileComponent::StaticClass(), tileName);
 			newTileComponent->RegisterComponent();
 			newTileComponent->AttachToComponent(GetRootComponent(), FAttachmentTransformRules::KeepRelativeTransform);
@@ -127,7 +142,11 @@ void AHexTiledBuildSurface::SpawnHexTiles()
 			newTileComponent->SetStaticMesh(smallTileMesh);
 			newTileComponent->SetCollisionObjectType(ECollisionChannel::ECC_GameTraceChannel1); // set object type to PlacingZone
 			newTileComponent->SetGenerateOverlapEvents(true);
-			newTileComponent->SetMaterial(0, chosenMaterial);
+
+			if (biomeRanges.Num() != 0 && biomeMaterials.Num() != 0) {
+				UMaterial* chosenMaterial = assignBiome(noiseSample);
+				newTileComponent->SetMaterial(0, chosenMaterial);
+			}
 
 			// Spawn the capsule component for each tile
 
@@ -173,9 +192,12 @@ void AHexTiledBuildSurface::SpawnHexTiles()
 				newBigTileComponent->AttachToComponent(GetRootComponent(), FAttachmentTransformRules::KeepRelativeTransform);
 				newBigTileComponent->SetRelativeTransform(newBigTileTransform);
 				newBigTileComponent->SetStaticMesh(bigTileMesh);
-				newBigTileComponent->SetMaterial(0, chosenMaterial);
 
-				if (noiseSample >= biomeRanges[1]) {
+				if (biomeRanges.Num() != 0 && biomeMaterials.Num() != 0) {
+					newBigTileComponent->SetMaterial(0, newTileComponent->GetMaterial(0));
+				}
+
+				if (biomeRanges.Num() > 1 && noiseSample >= biomeRanges[1]) {
 					// get surface socket transform
 					FVector socketPos = newBigTileComponent->GetSocketLocation(FName("Surface_Socket"));
 
@@ -265,79 +287,6 @@ TArray<float> AHexTiledBuildSurface::GenerateFalloffMap(int mapWidth, int mapHei
 	}
 
 	return FalloffMap;
-}
-
-/*
-Za sad valja aaaa jesam te zajebala 
-*/
-TArray<float> AHexTiledBuildSurface::SampleExistingNoiseMap(UTexture2D* texture, int mapWidth, int mapHeight) {
-	TArray<float> NoiseMap = TArray<float>();
-	if (!texture) return NoiseMap;
-
-	if (!texture->PlatformData) {
-		UE_LOG(LogTemp, Error, TEXT("SampleExistingNoiseMap: texture's PlatformData is null"));
-		return NoiseMap;
-	}
-
-	// mipmaps <3
-	FTexture2DMipMap* mip = &texture->PlatformData->Mips[0];
-	FByteBulkData* raw = &mip->BulkData;
-	FColor* mipData = static_cast<FColor*>(raw->Lock(LOCK_READ_ONLY));
-	FColor mipCopy[5000];
-	memcpy(&mipCopy, mipData, mapHeight * mapWidth * sizeof(FColor));
-
-	for (int y = 0; y < mapHeight; y++) {
-		FString buf = "";
-		for (int x = 0; x < mapWidth; x++) {
-			FColor color = mipData[y * mapWidth + x];
-
-			//UE_LOG(LogTemp, Display, TEXT("boja je %s"), *color.ToString());
-
-			float sampledColor = ((color.R + color.G + color.B) / 255.0f) / 3.0f;
-			buf.Appendf(TEXT("%f "), sampledColor);
-			NoiseMap.Add(sampledColor);
-		}
-
-		UE_LOG(LogTemp, Warning, TEXT("%s"), *buf);
-	}
-
-	raw->Unlock();	
-
-	/*TextureCompressionSettings OldCompressionSettings = texture->CompressionSettings; 
-	TextureMipGenSettings OldMipGenSettings = texture->MipGenSettings; 
-	bool OldSRGB = texture->SRGB;
-
-	texture->CompressionSettings = TextureCompressionSettings::TC_VectorDisplacementmap;
-	texture->MipGenSettings = TextureMipGenSettings::TMGS_NoMipmaps;
-	texture->SRGB = false;
-	texture->UpdateResource();
-
-	const FColor* FormatedImageData = static_cast<const FColor*>(texture->PlatformData->Mips[0].BulkData.LockReadOnly());
-
-	int32 x = texture->GetSizeX();
-	int32 y = texture->GetSizeY();
-
-	for (int32 X = 0; X < texture->GetSizeX(); X++)
-	{
-		FString buf = "";
-		for (int32 Y = 0; Y < texture->GetSizeY(); Y++)
-		{
-			FColor PixelColor = FormatedImageData[Y * texture->GetSizeX() + X];
-			float sampledColor = ((PixelColor.R + PixelColor.G + PixelColor.B) / 255.0f) / 3.0f;
-			buf.Appendf(TEXT("%d "), PixelColor.R);
-			NoiseMap.Add(sampledColor);
-		}
-		UE_LOG(LogTemp, Warning, TEXT("%s"), *buf);
-	}
-
-	texture->PlatformData->Mips[0].BulkData.Unlock();
-
-	texture->CompressionSettings = OldCompressionSettings;
-	texture->MipGenSettings = OldMipGenSettings;
-	texture->SRGB = OldSRGB;
-	texture->UpdateResource();*/
-
-	return NoiseMap;
 }
 
 /*

@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "Engine/TextureRenderTarget2D.h"
 #include "HexTiledBuildSurface.generated.h"
 
 class UStaticMesh;
@@ -58,12 +59,6 @@ public:
 	UCurveFloat* meshHeightCurve;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Noise)
-	bool useCustomHeightmap = false;
-
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Noise)
-	UTexture2D* customHeightmap;
-
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Noise)
 	float smallestScale = 0.001;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Noise)
@@ -74,6 +69,18 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Noise)
 	float curveOffset = 2.2f;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = CustomMap)
+	bool useCustomHeightmap = false;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = CustomMap)
+	UTexture2D* customHeightmap;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = CustomMap)
+	UTextureRenderTarget2D* renderTarget;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = CustomMap)
+	UMaterial* renderTargetMaterial;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = SmallTiles)
 	float capsuleHeight = 40;
@@ -123,6 +130,10 @@ public:
 	UFUNCTION(BlueprintCallable, BlueprintPure, meta = (BlueprintProtected))
 	TArray<FVector> getHexCentersCoords();
 
+	UFUNCTION(BlueprintCallable, BlueprintPure, BlueprintNativeEvent)
+	TArray<float> getCustomHeightMap(UTextureRenderTarget2D* renderTargetToWrite, UMaterial* renderTargetMaterialToWrite, UTexture2D* texture);
+	virtual TArray<float> getCustomHeightMap_Implementation(UTextureRenderTarget2D* renderTargetToWrite, UMaterial* renderTargetMaterialToWrite, UTexture2D* texture);
+
 private:
 	float interLayerDistance = (UE_DOUBLE_SQRT_3 / 2) * interCenterDistance;
 	float centerCornerDistance = interCenterDistance / UE_DOUBLE_SQRT_3;
@@ -134,7 +145,6 @@ private:
 	void SpawnHexTiles();
 
 	static TArray<float> GenerateNoiseMap(int mapWidth, int mapHeight, int seed, FVector2D offset, float scale, int octaves, float persistance, float lacunarity);
-	static TArray<float> SampleExistingNoiseMap(UTexture2D* texture, int mapWidth, int mapHeight);
 	static TArray<float> GenerateFalloffMap(int mapWidth, int mapHeight, float curveSlope, float curveOffset);
 
 	UMaterial* assignBiome(float heightMapValue);
