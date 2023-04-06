@@ -16,3 +16,19 @@ void ATopDownController::BeginPlay()
         }
     }
 }
+
+int64 ATopDownController::getMoneyCount()
+{
+    return this->moneyCount;
+}
+
+void ATopDownController::setMoneyCount(int64 money)
+{
+    this->moneyCount = money;
+}
+
+void ATopDownController::increaseMoneyCount(int64 money)
+{
+    this->moneyCount += money;
+}
+
