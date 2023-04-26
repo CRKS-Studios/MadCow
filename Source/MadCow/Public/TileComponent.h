@@ -52,6 +52,8 @@ private:
 	UStaticMesh* GetBiomeDetail(float heightMapValue);
 
 public:
+	UTileComponent();
+	
 	virtual void OnComponentDestroyed(bool bDestroyingHierarchy) override;
 
 	UFUNCTION(BlueprintCallable)

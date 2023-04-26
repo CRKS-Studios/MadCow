@@ -25,21 +25,19 @@ AHexTiledBuildSurface::AHexTiledBuildSurface()
 
 	this->templatesRoot = CreateDefaultSubobject<USceneComponent>(TEXT("Templates Root"));
 	this->templatesRoot->RegisterComponent();
-	this->AttachToComponent(GetRootComponent(), FAttachmentTransformRules::KeepRelativeTransform);
+	this->templatesRoot->AttachToComponent(GetRootComponent(), FAttachmentTransformRules::KeepRelativeTransform);
+	this->templatesRoot->bIsEditorOnly = false;
 
 	this->spawnedTileRoot = CreateDefaultSubobject<USceneComponent>(TEXT("Spawned Tiles Root"));
 	this->spawnedTileRoot->RegisterComponent();
-	this->AttachToComponent(GetRootComponent(), FAttachmentTransformRules::KeepRelativeTransform);
+	this->spawnedTileRoot->AttachToComponent(GetRootComponent(), FAttachmentTransformRules::KeepRelativeTransform);
+	this->spawnedTileRoot->bIsEditorOnly = false;
 }
 
 // Called when the game starts or when spawned
 void AHexTiledBuildSurface::BeginPlay()
 {
-	Super::BeginPlay();	
-	UpdateTileList();
-	UpdateSetupVariables();
-	WipeOnStart();
-	SpawnHexTiles();
+	Super::BeginPlay();
 }
 
 void AHexTiledBuildSurface::OnConstruction(const FTransform& Transform)
@@ -69,6 +67,8 @@ void AHexTiledBuildSurface::UpdateSetupVariables()
 	if (IsValid(heightmapGenerator) && !heightmapGenerator->bDisabled) {
 		this->numHexagonWidth = heightmapGenerator->GetHeightmapSizeX();
 		this->numHexagonHeight = heightmapGenerator->GetHeightmapSizeY();
+
+		heightmapGenerator->UpdateHeightmap();
 	}
 
 	this->interLayerDistance = (UE_DOUBLE_SQRT_3 / 2) * interCenterDistance;
@@ -93,26 +93,23 @@ void AHexTiledBuildSurface::UpdateSetupVariables()
 
 void AHexTiledBuildSurface::SpawnHexTiles()
 {
-	TArray<float> heightmap = TArray<float>();
-	if (IsValid(heightmapGenerator) && !heightmapGenerator->bDisabled) {
-		heightmap = this->heightmapGenerator->GetOutputHeightmap();
-	}
-	else {
-		heightmap.Init(1.0, hexCentersLocations.Num());
-	}
-
 	// For each position in the array of tile locations
 	for (int j = 0; j < numHexagonHeight; j++) {
 		for (int i = 0; i < numHexagonWidth; i++) {
 			// Get the new location of the tile
 			FVector loc = hexCentersLocations[j * numHexagonWidth + i];
 			// Get the noise value at that location
-			float noiseValue = heightmap[j * numHexagonWidth + i];
+			float noiseValue = 1.0;
+			float scaledNoiseValue = 1.0;
+			if (IsValid(heightmapGenerator) && !heightmapGenerator->bDisabled) {
+				noiseValue = heightmapGenerator->GetNormalizedHeightmapValueAt(j * numHexagonWidth + i);
+				scaledNoiseValue = heightmapGenerator->GetScaledHeightmapValueAt(j * numHexagonWidth + i);
+			}
 			
 			if (IsValid(primaryTileTemplate)) {
 				FString tileName = FString("PrimaryTile");
 				FName(*FString::Printf(TEXT("%d"), j * numHexagonWidth + i)).AppendString(tileName);
-				UTileComponent* spawnedTile = SpawnTileByTemplate(primaryTileTemplate, FName(tileName), loc, noiseValue);
+				UTileComponent* spawnedTile = SpawnTileByTemplate(primaryTileTemplate, FName(tileName), loc, noiseValue, scaledNoiseValue);
 				SpawnCapsuleForTile(spawnedTile);
 			}
 
@@ -124,7 +121,7 @@ void AHexTiledBuildSurface::SpawnHexTiles()
 					FString tileName;
 					tileT->GetName(tileName);
 					FName(*FString::Printf(TEXT("%d"), j * numHexagonWidth + i)).AppendString(tileName);
-					UTileComponent* spawnedTile = SpawnTileByTemplate(tileT, FName(tileName), loc, noiseValue);
+					UTileComponent* spawnedTile = SpawnTileByTemplate(tileT, FName(tileName), loc, noiseValue, scaledNoiseValue);
 				}
 				// ((ovo za big nije bazirano na sve tri nego samo jednoj malo varam))
 			}
@@ -169,17 +166,13 @@ void AHexTiledBuildSurface::UpdateTileList()
 	this->heightmapGenerator = Cast<UHeightmapGeneratorComponent>(GetComponentByClass(UHeightmapGeneratorComponent::StaticClass()));
 }
 
-UTileComponent* AHexTiledBuildSurface::SpawnTileByTemplate(UTileComponent* tileTemplate, FName name, FVector relativeLocation, float noiseMultiplier)
+UTileComponent* AHexTiledBuildSurface::SpawnTileByTemplate(UTileComponent* tileTemplate, FName name, FVector relativeLocation, float normalizedNoise, float scaledNoise)
 {
 	FTransform templateTileTransform = tileTemplate->GetRelativeTransform();
 	FVector scale = tileTemplate->GetRelativeScale3D();
 
 	// Spawn small tiles
-	scale.Z = noiseMultiplier;
-
-	if (IsValid(heightmapGenerator) && !heightmapGenerator->bDisabled) {
-		scale.Z *= heightmapGenerator->heightMultiplier;
-	}
+	scale.Z = scaledNoise;
 
 	FTransform newTileTransform = FTransform(templateTileTransform.GetRotation(), relativeLocation + templateTileTransform.GetLocation(), scale);
 
@@ -190,7 +183,7 @@ UTileComponent* AHexTiledBuildSurface::SpawnTileByTemplate(UTileComponent* tileT
 	newTileComponent->SetVisibility(!bDisplayTemplates);
 	newTileComponent->SetHiddenInGame(bDisplayTemplates);
 	newTileComponent->SetRelativeTransform(newTileTransform);
-	newTileComponent->SetTileHeight(noiseMultiplier);
+	newTileComponent->SetTileHeight(normalizedNoise);
 	newTileComponent->ApplyBiome();
 
 	return newTileComponent;

@@ -5,6 +5,12 @@
 #include "Engine/StaticMeshActor.h" 
 
 
+UTileComponent::UTileComponent()
+{
+	this->SetCollisionObjectType(ECollisionChannel::ECC_GameTraceChannel1);
+	this->SetGenerateOverlapEvents(true);
+}
+
 void UTileComponent::OnComponentDestroyed(bool bDestroyingHierarchy)
 {
 	for (auto a : spawnedDetail) {

@@ -17,10 +17,6 @@ class MADCOW_API AHexTiledBuildSurface : public AActor
 	
 private:
 	// Components
-	TArray<UTileComponent*> tileTemplates;
-
-	UTileComponent* primaryTileTemplate;
-
 	float interLayerDistance = (UE_DOUBLE_SQRT_3 / 2) * interCenterDistance;
 
 	float centerCornerDistance = interCenterDistance / UE_DOUBLE_SQRT_3;
@@ -30,7 +26,11 @@ private:
 	USceneComponent* templatesRoot;
 	USceneComponent* spawnedTileRoot;
 
-public:	
+public:
+	TArray<UTileComponent*> tileTemplates;
+
+	UTileComponent* primaryTileTemplate;
+
 	UPROPERTY(BlueprintReadOnly)
 	UHeightmapGeneratorComponent* heightmapGenerator;
 	
@@ -66,7 +66,7 @@ private:
 
 	void UpdateTileList();
 
-	UTileComponent* SpawnTileByTemplate(UTileComponent* tileTemplate, FName name, FVector relativeLocation, float noiseMultiplier);
+	UTileComponent* SpawnTileByTemplate(UTileComponent* tileTemplate, FName name, FVector relativeLocation, float normalizedNoise, float scaledNoise);
 
 	void SpawnCapsuleForTile(UTileComponent* parentTile);
 

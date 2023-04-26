@@ -48,15 +48,7 @@ TArray<float> UHeightmapGeneratorComponent::GetOutputHeightmap()
 		float noiseSample = noiseMap[i];
 		if (bUseNoise && bUseFalloffMap) noiseSample -= falloffMap[i];
 
-		float out = noiseSample;
-		if (bUseMeshHeightCurve) {
-			out *= meshHeightCurve->GetFloatValue(noiseSample);
-		}
-		if (out <= smallestScale) {
-			out = smallestScale;
-		}
-
-		outputMap.Add(out);
+		outputMap.Add(noiseSample);
 	}
 
 	return outputMap;
@@ -80,6 +72,33 @@ int32 UHeightmapGeneratorComponent::GetHeightmapSizeY()
 	else {
 		return mapHeight;
 	}
+}
+
+float UHeightmapGeneratorComponent::GetNormalizedHeightmapValueAt(int64 index)
+{
+	if (index < 0 || index >= heightmap.Num()) return -1.0;
+	return heightmap[index];
+}
+
+float UHeightmapGeneratorComponent::GetScaledHeightmapValueAt(int64 index)
+{
+	if (index < 0 || index >= heightmap.Num()) return -1.0;
+
+	float returnVal = heightmap[index];
+
+	if (!bDisabled) {
+		returnVal *= heightMultiplier;
+
+		if (bUseMeshHeightCurve) {
+			returnVal *= meshHeightCurve->GetFloatValue(returnVal);
+		}
+
+		if (returnVal <= smallestScale) {
+			returnVal = smallestScale;
+		}
+	}
+
+	return returnVal;
 }
 
 
@@ -112,7 +131,7 @@ octaves - number of times sampled / describes level of detail
 persistance - influences amplitude of signal, amplitude decreases with octave R[0, 1]
 lacunarity - influences frequency of signal, frequency increases with octave R 1+
 */
-TArray<float> UHeightmapGeneratorComponent::GenerateNoiseMap(int width, int height, int seedParam, FVector2D mapOffset, float scaleParam, int octavesParam, float persistanceParam, float lacunarityParam) {
+TArray<float> UHeightmapGeneratorComponent::GenerateNoiseMap(int width, int height, int seedParam, FVector2D mapOffset, FVector2D scaleParam, int octavesParam, float persistanceParam, float lacunarityParam) {
 	TArray<float> NoiseMap = TArray<float>();
 
 	// seed
@@ -125,9 +144,8 @@ TArray<float> UHeightmapGeneratorComponent::GenerateNoiseMap(int width, int heig
 		octaveOffsets.Add(FVector2D(offsetX, offsetY));
 	}
 
-	if (scaleParam <= 0) {
-		scaleParam = 0.0001f;
-	}
+	scaleParam.X = FMath::Max(0.0001f, scaleParam.X);
+	scaleParam.Y = FMath::Max(0.0001f, scaleParam.Y);
 
 	for (int y = 0; y < height; y++) {
 		for (int x = 0; x < width; x++) {
@@ -137,7 +155,7 @@ TArray<float> UHeightmapGeneratorComponent::GenerateNoiseMap(int width, int heig
 			float noiseHeight = 0;
 
 			for (int i = 0; i < octavesParam; i++) {
-				FVector2D samplePos = FVector2D(x / scaleParam * frequency + octaveOffsets[i].X, y / scaleParam * frequency + octaveOffsets[i].Y);
+				FVector2D samplePos = FVector2D(x / scaleParam.X * frequency + octaveOffsets[i].X, y / scaleParam.Y * frequency + octaveOffsets[i].Y);
 
 				float perlinValue = FMath::PerlinNoise2D(samplePos);
 				noiseHeight += perlinValue * amplitude;
@@ -177,4 +195,9 @@ TArray<float> UHeightmapGeneratorComponent::GenerateFalloffMap(int mapWidthParam
 	}
 
 	return FalloffMap;
+}
+
+void UHeightmapGeneratorComponent::UpdateHeightmap()
+{
+	this->heightmap = GetOutputHeightmap();
 }

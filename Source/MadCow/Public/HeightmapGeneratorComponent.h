@@ -11,6 +11,9 @@ class MADCOW_API UHeightmapGeneratorComponent : public UActorComponent
 {
 	GENERATED_BODY()
 
+private:
+	TArray<float> heightmap;
+
 public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Global)
 	bool bDisabled = false;
@@ -25,7 +28,7 @@ public:
 	int64 mapWidth = 64;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Heightmap Generation|Noise", meta = (EditCondition = "!bDisabled && bUseNoise"))
-	float noiseMapScale = 1;
+	FVector2D noiseMapScale = FVector2D(1.0, 1.0);
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Heightmap Generation|Noise", meta = (EditCondition = "!bDisabled && bUseNoise"))
 	int seed = 0;
@@ -75,6 +78,9 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Heightmap Generation|Custom Map", meta = (EditCondition = "!bDisabled && bUseCustomHeightmap"))
 	UMaterial* renderTargetMaterial;
 
+private:
+	TArray<float> GetOutputHeightmap();
+
 protected:
 	// Called when the game starts
 	virtual void BeginPlay() override;
@@ -83,10 +89,11 @@ protected:
 	TArray<float> GetCustomHeightMap(UTextureRenderTarget2D* renderTargetToWrite, UMaterial* renderTargetMaterialToWrite, UTexture2D* texture);
 	virtual TArray<float> GetCustomHeightMap_Implementation(UTextureRenderTarget2D* renderTargetToWrite, UMaterial* renderTargetMaterialToWrite, UTexture2D* texture);
 
-	TArray<float> GenerateNoiseMap(int width, int height, int seed, FVector2D mapOffset, float scale, int octaves, float persistance, float lacunarity);
-	TArray<float> GenerateFalloffMap(int width, int height, float curveSlope, float curveOffset);
+	static TArray<float> GenerateNoiseMap(int width, int height, int seed, FVector2D mapOffset, FVector2D scale, int octaves, float persistance, float lacunarity);
+	static TArray<float> GenerateFalloffMap(int width, int height, float curveSlope, float curveOffset);
 
 public:	
+
 	// Called every frame
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
@@ -94,11 +101,17 @@ public:
 	UHeightmapGeneratorComponent();
 
 	UFUNCTION(BlueprintCallable, BlueprintPure)
-	TArray<float> GetOutputHeightmap();
-
-	UFUNCTION(BlueprintCallable, BlueprintPure)
 	int32 GetHeightmapSizeX();
 
 	UFUNCTION(BlueprintCallable, BlueprintPure)
 	int32 GetHeightmapSizeY();
+
+	UFUNCTION(BlueprintCallable, BlueprintPure)
+	float GetNormalizedHeightmapValueAt(int64 index);
+
+	UFUNCTION(BlueprintCallable, BlueprintPure)
+	float GetScaledHeightmapValueAt(int64 index);
+	
+	UFUNCTION(BlueprintCallable)
+	void UpdateHeightmap();
 };
