@@ -1,12 +1,13 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
-
+#include "HexTiledBuildSurface.h"
 #include "Components/SceneComponent.h"
 #include "TileComponent.h"
 #include "Engine/StaticMesh.h"
 #include "Components/CapsuleComponent.h"
 #include "Math/TransformCalculus3D.h"
-#include "HexTiledBuildSurface.h"
+#include "HeightmapGeneratorComponent.h"
+#include "Engine/StaticMeshActor.h" 
 
 // Sets default values
 AHexTiledBuildSurface::AHexTiledBuildSurface()
@@ -16,25 +17,38 @@ AHexTiledBuildSurface::AHexTiledBuildSurface()
 
 
 	this->hexCentersLocations = TArray<FVector>();
+	this->tileTemplates = TArray<UTileComponent*>();
 
-	USceneComponent* sceneComponent = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("Scene Root"));
+	USceneComponent* sceneComponent = CreateDefaultSubobject<USceneComponent>(TEXT("Root"));
 	sceneComponent->RegisterComponent();
 	this->SetRootComponent(sceneComponent);
+
+	this->templatesRoot = CreateDefaultSubobject<USceneComponent>(TEXT("Templates Root"));
+	this->templatesRoot->RegisterComponent();
+	this->templatesRoot->AttachToComponent(GetRootComponent(), FAttachmentTransformRules::KeepRelativeTransform);
+	this->templatesRoot->bIsEditorOnly = false;
+
+	this->spawnedTileRoot = CreateDefaultSubobject<USceneComponent>(TEXT("Spawned Tiles Root"));
+	this->spawnedTileRoot->RegisterComponent();
+	this->spawnedTileRoot->AttachToComponent(GetRootComponent(), FAttachmentTransformRules::KeepRelativeTransform);
+	this->spawnedTileRoot->bIsEditorOnly = false;
 }
 
 // Called when the game starts or when spawned
 void AHexTiledBuildSurface::BeginPlay()
 {
-	Super::BeginPlay();	
-	UpdateSetupVariables();
-	SpawnHexTiles();
+	Super::BeginPlay();
 }
 
 void AHexTiledBuildSurface::OnConstruction(const FTransform& Transform)
 {
 	Super::OnConstruction(Transform);
+	UpdateTileList();
 	UpdateSetupVariables();
-	SpawnHexTiles();
+	WipeOnStart();
+	if (!bDisplayTemplates) {
+		SpawnHexTiles();
+	}
 }
 
 // Called every frame
@@ -50,6 +64,13 @@ TArray<FVector> AHexTiledBuildSurface::getHexCentersCoords()
 
 void AHexTiledBuildSurface::UpdateSetupVariables()
 {
+	if (IsValid(heightmapGenerator) && !heightmapGenerator->bDisabled) {
+		this->numHexagonWidth = heightmapGenerator->GetHeightmapSizeX();
+		this->numHexagonHeight = heightmapGenerator->GetHeightmapSizeY();
+
+		heightmapGenerator->UpdateHeightmap();
+	}
+
 	this->interLayerDistance = (UE_DOUBLE_SQRT_3 / 2) * interCenterDistance;
 	this->centerCornerDistance = interCenterDistance / UE_DOUBLE_SQRT_3;
 
@@ -72,70 +93,123 @@ void AHexTiledBuildSurface::UpdateSetupVariables()
 
 void AHexTiledBuildSurface::SpawnHexTiles()
 {
-	TArray<USceneComponent*, FDefaultAllocator> children = TArray<USceneComponent*, FDefaultAllocator>();
-	GetRootComponent()->GetChildrenComponents(true, children);
-
-	for (auto c : children) {
-		c->DetachFromParent();
-		c->DestroyComponent();
-	}
-
-	for (int i = 0; i < numHexagonWidth; i++) {
-		for (int j = 0; j < numHexagonHeight; j++) {
-			FVector loc = hexCentersLocations[i * numHexagonHeight + j];
-
-			// Spawn small tiles
-
-			loc.Z += FMath::FRandRange(-tileMeshTransform.GetLocation().Z, tileMeshTransform.GetLocation().Z);
-			FTransform newTileTransform = FTransform(tileMeshTransform.GetRotation(), loc, tileMeshTransform.GetScale3D());
-
-			FName tileName = FName(*FString::Printf(TEXT("Tile%d"), j * numHexagonWidth + i));
-
-			UTileComponent* newTileComponent = NewObject<UTileComponent>(this, UTileComponent::StaticClass(), tileName);
-			newTileComponent->RegisterComponent();
-			newTileComponent->AttachToComponent(GetRootComponent(), FAttachmentTransformRules::KeepRelativeTransform);
-			newTileComponent->SetRelativeTransform(newTileTransform);
-			newTileComponent->SetStaticMesh(smallTileMesh);
-			newTileComponent->SetCollisionObjectType(ECollisionChannel::ECC_GameTraceChannel1); // set object type to PlacingZone
-			newTileComponent->SetGenerateOverlapEvents(true);
-
-			// Spawn the capsule component for each tile
-
-			float radius = interCenterDistance / 2;
-			FTransform newerCompTransform = FTransform(FRotator(), FVector(0, 0, capsuleHeight), FVector(1 / tileMeshTransform.GetScale3D().X, 1 / tileMeshTransform.GetScale3D().Y, 1 / tileMeshTransform.GetScale3D().Z));
-
-			FName capsuleName = FName(*FString::Printf(TEXT("TileCapsule%d"), j * numHexagonWidth + i));
-
-			UCapsuleComponent* newCapsuleComponent = NewObject<UCapsuleComponent>(this, UCapsuleComponent::StaticClass(), capsuleName);
-			newCapsuleComponent->RegisterComponent();
-			newCapsuleComponent->SetCapsuleSize(radius, capsuleHeight);
-			newCapsuleComponent->AttachToComponent(newTileComponent, FAttachmentTransformRules::KeepRelativeTransform);
-			newCapsuleComponent->SetRelativeTransform(newerCompTransform);
-			newCapsuleComponent->SetCollisionObjectType(ECollisionChannel::ECC_GameTraceChannel3); // set object type to BuildCollision
-			newCapsuleComponent->SetGenerateOverlapEvents(true);
-
-			if (!bDisplayCapsules) {
-				newCapsuleComponent->SetVisibility(false);
+	// For each position in the array of tile locations
+	for (int j = 0; j < numHexagonHeight; j++) {
+		for (int i = 0; i < numHexagonWidth; i++) {
+			// Get the new location of the tile
+			FVector loc = hexCentersLocations[j * numHexagonWidth + i];
+			// Get the noise value at that location
+			float noiseValue = 1.0;
+			float scaledNoiseValue = 1.0;
+			if (IsValid(heightmapGenerator) && !heightmapGenerator->bDisabled) {
+				noiseValue = heightmapGenerator->GetNormalizedHeightmapValueAt(j * numHexagonWidth + i);
+				scaledNoiseValue = heightmapGenerator->GetScaledHeightmapValueAt(j * numHexagonWidth + i);
+			}
+			
+			if (IsValid(primaryTileTemplate)) {
+				FString tileName = FString("PrimaryTile");
+				FName(*FString::Printf(TEXT("%d"), j * numHexagonWidth + i)).AppendString(tileName);
+				UTileComponent* spawnedTile = SpawnTileByTemplate(primaryTileTemplate, FName(tileName), loc, noiseValue, scaledNoiseValue);
+				SpawnCapsuleForTile(spawnedTile);
 			}
 
-			bool expression = (j % 4 == 0) ? (i % 2 == 0) : (i % 2 == 1);
-			// Spawn big hex tiles with a probability
-			if (j % 2 == 0 && expression && FMath::FRandRange(0.0, 100.0) < bigTileSpawnRate) {
-				FVector v = loc;
-				v.Y -= centerCornerDistance;
-				v.Z = tileMeshTransform.GetLocation().Z + 1;
-				FTransform newBigTileTransform = FTransform(tileMeshTransform.GetRotation(), v, tileMeshTransform.GetScale3D() * (2.0 + bigTileScalingParameter));
+			// For each template that we have
+			for (auto tileT : tileTemplates) {
 
-
-				FName bigTileName = FName(*FString::Printf(TEXT("BigTile%d"), j * numHexagonWidth + i));
-
-				UTileComponent* newBigTileComponent = NewObject<UTileComponent>(this, UTileComponent::StaticClass(), bigTileName);
-				newBigTileComponent->RegisterComponent();
-				newBigTileComponent->AttachToComponent(GetRootComponent(), FAttachmentTransformRules::KeepRelativeTransform);
-				newBigTileComponent->SetRelativeTransform(newBigTileTransform);
-				newBigTileComponent->SetStaticMesh(bigTileMesh);
+				if (tileT->ShouldSpawnOnCoordinates(i, j)) {
+					// Create name and spawn tile
+					FString tileName;
+					tileT->GetName(tileName);
+					FName(*FString::Printf(TEXT("%d"), j * numHexagonWidth + i)).AppendString(tileName);
+					UTileComponent* spawnedTile = SpawnTileByTemplate(tileT, FName(tileName), loc, noiseValue, scaledNoiseValue);
+				}
+				// ((ovo za big nije bazirano na sve tri nego samo jednoj malo varam))
 			}
 		}
 	}
 }
 
+
+void AHexTiledBuildSurface::WipeOnStart() {
+	TArray<USceneComponent*, FDefaultAllocator> children = TArray<USceneComponent*, FDefaultAllocator>();
+	this->spawnedTileRoot->GetChildrenComponents(true, children);
+
+	for (auto c : children) {
+		c->DetachFromComponent(FDetachmentTransformRules::KeepWorldTransform);
+		c->DestroyComponent();
+	}
+}
+
+void AHexTiledBuildSurface::UpdateTileList()
+{
+	this->tileTemplates.Empty();
+	this->tileTemplates = TArray<UTileComponent*>();
+
+	TArray<USceneComponent*> arr = TArray<USceneComponent*>();
+	this->templatesRoot->GetChildrenComponents(true, arr);
+
+	for (USceneComponent* p : arr) {
+		auto t = Cast<UTileComponent>(p);
+
+		if (!IsValid(t)) continue;
+
+		t->SetHiddenInGame(!bDisplayTemplates);
+		t->SetVisibility(bDisplayTemplates);
+		if (t->isPrimaryTile) {
+			this->primaryTileTemplate = t;
+		}
+		else {
+			this->tileTemplates.Add(t);
+		}
+	}
+
+	this->heightmapGenerator = Cast<UHeightmapGeneratorComponent>(GetComponentByClass(UHeightmapGeneratorComponent::StaticClass()));
+}
+
+UTileComponent* AHexTiledBuildSurface::SpawnTileByTemplate(UTileComponent* tileTemplate, FName name, FVector relativeLocation, float normalizedNoise, float scaledNoise)
+{
+	FTransform templateTileTransform = tileTemplate->GetRelativeTransform();
+	FVector scale = tileTemplate->GetRelativeScale3D();
+
+	// Spawn small tiles
+	scale.Z = scaledNoise;
+
+	FTransform newTileTransform = FTransform(templateTileTransform.GetRotation(), relativeLocation + templateTileTransform.GetLocation(), scale);
+
+	// UTileComponent* newTileComponent = NewObject<UTileComponent>(this, UTileComponent::StaticClass(), name);
+	UTileComponent* newTileComponent = DuplicateObject<UTileComponent>(tileTemplate, this, name);
+	newTileComponent->RegisterComponent();
+	newTileComponent->AttachToComponent(this->spawnedTileRoot, FAttachmentTransformRules::KeepRelativeTransform);
+	newTileComponent->SetVisibility(!bDisplayTemplates);
+	newTileComponent->SetHiddenInGame(bDisplayTemplates);
+	newTileComponent->SetRelativeTransform(newTileTransform);
+	newTileComponent->SetTileHeight(normalizedNoise);
+	newTileComponent->ApplyBiome();
+
+	return newTileComponent;
+}
+
+void AHexTiledBuildSurface::SpawnCapsuleForTile(UTileComponent* parentTile)
+{
+	// Spawn the capsule component for each tile
+	float radius = interCenterDistance / 2;
+	FVector parentScale = parentTile->GetRelativeScale3D();
+
+	FTransform newerCompTransform = FTransform(FRotator(), FVector(0, 0, capsuleHeight), FVector(1 / parentScale.X, 1 / parentScale.Y, 1 / parentScale.Z));
+
+	FString capsuleName;
+	parentTile->GetName(capsuleName);
+	FName("Capsule").AppendString(capsuleName);
+
+	UCapsuleComponent* newCapsuleComponent = NewObject<UCapsuleComponent>(this, UCapsuleComponent::StaticClass(), FName(capsuleName));
+	newCapsuleComponent->RegisterComponent();
+	newCapsuleComponent->SetCapsuleSize(radius, capsuleHeight);
+	newCapsuleComponent->AttachToComponent(parentTile, FAttachmentTransformRules::KeepRelativeTransform);
+	newCapsuleComponent->SetRelativeTransform(newerCompTransform);
+	newCapsuleComponent->SetCollisionObjectType(ECollisionChannel::ECC_GameTraceChannel3); // set object type to BuildCollision
+	newCapsuleComponent->SetGenerateOverlapEvents(true);
+
+	if (!bDisplayCapsules) {
+		newCapsuleComponent->SetVisibility(false);
+	}
+}

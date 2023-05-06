@@ -7,47 +7,68 @@
 #include "HexTiledBuildSurface.generated.h"
 
 class UStaticMesh;
+class UHeightmapGeneratorComponent;
+class UTileComponent;
 
 UCLASS()
 class MADCOW_API AHexTiledBuildSurface : public AActor
 {
 	GENERATED_BODY()
 	
+private:
+	// Components
+	float interLayerDistance = (UE_DOUBLE_SQRT_3 / 2) * interCenterDistance;
 
-public:	
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = SmallTiles)
+	float centerCornerDistance = interCenterDistance / UE_DOUBLE_SQRT_3;
+
+	TArray<FVector> hexCentersLocations;
+
+	USceneComponent* templatesRoot;
+	USceneComponent* spawnedTileRoot;
+
+public:
+	TArray<UTileComponent*> tileTemplates;
+
+	UTileComponent* primaryTileTemplate;
+
+	UPROPERTY(BlueprintReadOnly)
+	UHeightmapGeneratorComponent* heightmapGenerator;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = MapSetup, meta = (EditCondition = "!IsValid(heightmapGenerator) || heightmapGenerator->disabled"))
 	int64 numHexagonWidth = 10;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = SmallTiles)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = MapSetup, meta = (EditCondition = "!IsValid(heightmapGenerator) || heightmapGenerator->disabled"))
 	int64 numHexagonHeight = 10;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = SmallTiles)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = MapSetup)
 	float interCenterDistance = 10.0;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = SmallTiles)
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = MapSetup)
 	float capsuleHeight = 40;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = SmallTiles)
-	UStaticMesh* smallTileMesh;
-
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = SmallTiles)
-	FTransform tileMeshTransform;
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Debug)
+	bool bDisplayTemplates = false;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Debug)
 	bool bDisplayCapsules = false;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = BigTiles)
-	float bigTileSpawnRate = 10.0;
-
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = BigTiles)
-	UStaticMesh* bigTileMesh;
-
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = BigTiles)
-	double bigTileScalingParameter = 0.0;
 
 
 	// Sets default values for this actor's properties
 	AHexTiledBuildSurface();
+
+private:
+	void UpdateSetupVariables();
+
+	void SpawnHexTiles();
+
+	void WipeOnStart();
+
+	void UpdateTileList();
+
+	UTileComponent* SpawnTileByTemplate(UTileComponent* tileTemplate, FName name, FVector relativeLocation, float normalizedNoise, float scaledNoise);
+
+	void SpawnCapsuleForTile(UTileComponent* parentTile);
 
 protected:
 	// Called when the game starts or when spawned
@@ -62,14 +83,4 @@ public:
 
 	UFUNCTION(BlueprintCallable, BlueprintPure, meta = (BlueprintProtected))
 	TArray<FVector> getHexCentersCoords();
-
-private:
-	float interLayerDistance = (UE_DOUBLE_SQRT_3 / 2) * interCenterDistance;
-	float centerCornerDistance = interCenterDistance / UE_DOUBLE_SQRT_3;
-
-	TArray<FVector> hexCentersLocations;
-
-	void UpdateSetupVariables();
-
-	void SpawnHexTiles();
 };
