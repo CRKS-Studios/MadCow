@@ -1,12 +1,12 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
+#include "HexTiledBuildSurface.h"
 
 #include "Components/SceneComponent.h"
 #include "TileComponent.h"
 #include "Engine/StaticMesh.h"
 #include "Components/CapsuleComponent.h"
 #include "Math/TransformCalculus3D.h"
-#include "HexTiledBuildSurface.h"
 
 // Sets default values
 AHexTiledBuildSurface::AHexTiledBuildSurface()
@@ -86,7 +86,7 @@ void AHexTiledBuildSurface::SpawnHexTiles()
 	GetRootComponent()->GetChildrenComponents(true, children);
 
 	for (auto c : children) {
-		c->DetachFromParent();
+		c->DetachFromComponent(FDetachmentTransformRules::KeepWorldTransform);
 		c->DestroyComponent();
 	}
 
